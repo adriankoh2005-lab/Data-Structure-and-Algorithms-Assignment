@@ -1,0 +1,414 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.util.*;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+
+// ==================== LOGIN FRAME ====================
+class LoginFrame extends JFrame implements ActionListener {
+
+    private JTextField usernameField;
+    private JPasswordField passwordField;
+    private JButton loginButton, registerButton;
+    private JLabel messageLabel;
+    private final File userFile = new File("users.txt");
+
+    //Dark theme
+    private final Color COLOR_BACKGROUND = new Color(33, 33, 33);
+    private final Color COLOR_INPUT_BG = new Color(50, 50, 50);
+    private final Color COLOR_TEXT = new Color(255, 255, 255);
+    private final Color COLOR_BTN_LOGIN = new Color(76, 175, 80); // Green
+    private final Color COLOR_BTN_REG = new Color(66, 66, 66);    // Gray
+
+    public LoginFrame() {
+        setTitle("Login");
+        setSize(400, 320);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        getContentPane().setBackground(COLOR_BACKGROUND);
+        setLayout(new BorderLayout());
+
+        //Header
+        JLabel titleLabel = new JLabel("Welcome", JLabel.CENTER);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titleLabel.setForeground(COLOR_TEXT);
+        titleLabel.setBorder(new EmptyBorder(20, 0, 10, 0));
+        add(titleLabel, BorderLayout.NORTH);
+
+        //Center panel
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        centerPanel.setBackground(COLOR_BACKGROUND);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        //Username label and field
+        centerPanel.add(createLabel("Username"), gbc);
+        gbc.gridy = 1;
+        usernameField = createTextField();
+        centerPanel.add(usernameField, gbc);
+
+        //Password label and field
+        gbc.gridy = 2;
+        centerPanel.add(createLabel("Password"), gbc);
+        gbc.gridy = 3;
+        passwordField = createPasswordField();
+        centerPanel.add(passwordField, gbc);
+
+        add(centerPanel, BorderLayout.CENTER);
+
+        //Bottom panel with buttons and message
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+        bottomPanel.setBackground(COLOR_BACKGROUND);
+        bottomPanel.setBorder(new EmptyBorder(0, 40, 30, 40));
+
+        JPanel btnPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        btnPanel.setBackground(COLOR_BACKGROUND);
+        loginButton = createButton("Login", COLOR_BTN_LOGIN);
+        registerButton = createButton("Register", COLOR_BTN_REG);
+        btnPanel.add(loginButton);
+        btnPanel.add(registerButton);
+
+        messageLabel = new JLabel(" ", JLabel.CENTER);
+        messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        messageLabel.setForeground(Color.RED);
+        messageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        messageLabel.setBorder(new EmptyBorder(10, 0, 0, 0));
+
+        bottomPanel.add(btnPanel);
+        bottomPanel.add(messageLabel);
+        add(bottomPanel, BorderLayout.SOUTH);
+
+        setVisible(true);
+    }
+
+    private JLabel createLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setForeground(COLOR_TEXT);
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        return label;
+    }
+
+    private JTextField createTextField() {
+        JTextField field = new JTextField(15);
+        field.setBackground(COLOR_INPUT_BG);
+        field.setForeground(COLOR_TEXT);
+        field.setCaretColor(COLOR_TEXT);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+        field.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        return field;
+    }
+
+    private JPasswordField createPasswordField() {
+        JPasswordField field = new JPasswordField(15);
+        field.setBackground(COLOR_INPUT_BG);
+        field.setForeground(COLOR_TEXT);
+        field.setCaretColor(COLOR_TEXT);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(80, 80, 80)),
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+        field.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        return field;
+    }
+
+    private JButton createButton(String text, Color bg) {
+        JButton btn = new JButton(text);
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.addActionListener(this);
+        return btn;
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        String username = usernameField.getText().trim();
+        String password = new String(passwordField.getPassword()).trim();
+
+        if (e.getSource() == loginButton) {
+            if (username.isEmpty() || password.isEmpty()) {
+                showMessage("Username and password required", Color.RED);
+                return;
+            }
+            if (authenticate(username, password)) {
+                dispose();
+                SwingUtilities.invokeLater(() -> new CalculatorApps(username));
+            } else {
+                showMessage("Invalid username or password", Color.RED);
+            }
+        } else if (e.getSource() == registerButton) {
+            if (username.isEmpty() || password.isEmpty()) {
+                showMessage("Cannot register empty credentials", Color.RED);
+                return;
+            }
+            if (userExists(username)) showMessage("Username already exists", Color.RED);
+            else {
+                registerUser(username, password);
+                showMessage("Account created! Please login.", new Color(76, 175, 80));
+            }
+        }
+    }
+
+    private void showMessage(String msg, Color color) {
+        messageLabel.setForeground(color);
+        messageLabel.setText(msg);
+    }
+
+    private boolean authenticate(String username, String password) {
+        if (!userFile.exists()) return false;
+        try (BufferedReader br = new BufferedReader(new FileReader(userFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(":");
+                if (parts.length == 2 && parts[0].equals(username) && parts[1].equals(password)) return true;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean userExists(String username) {
+        if (!userFile.exists()) return false;
+        try (BufferedReader br = new BufferedReader(new FileReader(userFile))) {
+            String line;
+            while ((line = br.readLine()) != null) if (line.startsWith(username + ":")) return true;
+        } catch (IOException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    private void registerUser(String username, String password) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(userFile, true))) {
+            bw.write(username + ":" + password);
+            bw.newLine();
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+}
+
+// ==================== CALCULATOR FRAME ====================
+class CalculatorApps extends JFrame implements ActionListener {
+
+    private JTextField display;
+    private JTextArea historyArea;
+    private StringBuilder inputBuffer;
+    private LinkedList<String> historyList;
+    private String currentUser;
+
+    //Dark theme colors
+    private final Color COLOR_BACKGROUND = new Color(33, 33, 33);
+    private final Color COLOR_BTN_NUM = new Color(66, 66, 66);
+    private final Color COLOR_BTN_OP = new Color(255, 152, 0);
+    private final Color COLOR_BTN_EQ = new Color(76, 175, 80);
+    private final Color COLOR_BTN_CLR = new Color(244, 67, 54);
+    private final Color COLOR_TEXT = new Color(255, 255, 255);
+
+    public CalculatorApps(String username) {
+        this.currentUser = username;
+        setTitle("Calculator - " + username);
+        setSize(600, 500);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(COLOR_BACKGROUND);
+
+        //Window listener to save history on close
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                saveHistory();
+                System.exit(0);
+            }
+        });
+
+        inputBuffer = new StringBuilder();
+        historyList = new LinkedList<>();
+
+        //Display
+        display = new JTextField();
+        display.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        display.setEditable(false);
+        display.setHorizontalAlignment(JTextField.RIGHT);
+        display.setBackground(COLOR_BACKGROUND);
+        display.setForeground(COLOR_TEXT);
+        display.setBorder(BorderFactory.createEmptyBorder(20, 15, 20, 15));
+        display.setCaretColor(COLOR_TEXT);
+        add(display, BorderLayout.NORTH);
+
+        //History area
+        historyArea = new JTextArea();
+        historyArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        historyArea.setEditable(false);
+        historyArea.setBackground(new Color(45, 45, 45));
+        historyArea.setForeground(COLOR_TEXT);
+        historyArea.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+        JScrollPane historyScroll = new JScrollPane(historyArea);
+        historyScroll.setPreferredSize(new Dimension(200, 0));
+        historyScroll.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(new Color(100, 100, 100)),
+                "History", 0, 0,
+                new Font("Segoe UI", Font.BOLD, 12), COLOR_TEXT));
+        add(historyScroll, BorderLayout.EAST);
+
+        //Buttons
+        JPanel buttonPanel = new JPanel(new GridLayout(5, 4, 10, 10));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        buttonPanel.setBackground(COLOR_BACKGROUND);
+
+        String[] buttons = {
+                "(", ")", "%", "AC",
+                "7", "8", "9", "÷",
+                "4", "5", "6", "×",
+                "1", "2", "3", "-",
+                "0", ".", "=", "+"
+        };
+
+        for (String text : buttons) {
+            JButton button = new JButton(text);
+            button.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            button.setForeground(COLOR_TEXT);
+            button.addActionListener(this);
+            button.setFocusPainted(false);
+            button.setBorderPainted(false);
+
+            if ("AC".equals(text)) button.setBackground(COLOR_BTN_CLR);
+            else if ("=".equals(text)) button.setBackground(COLOR_BTN_EQ);
+            else if ("+-×÷%()".contains(text)) {
+                button.setBackground(COLOR_BTN_OP);
+                button.setForeground(Color.BLACK);
+            }
+            else button.setBackground(COLOR_BTN_NUM);
+
+            buttonPanel.add(button);
+        }
+        add(buttonPanel, BorderLayout.CENTER);
+
+        loadHistory();
+        setVisible(true);
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        String command = e.getActionCommand();
+        if (command.equals("=")) {
+            try {
+                String expression = inputBuffer.toString();
+                String result = evaluateExpression(expression);
+                display.setText(result);
+                inputBuffer.setLength(0);
+                inputBuffer.append(result);
+
+                //Save to history
+                historyList.add(expression + " = " + result);
+                updateHistoryArea();
+            } catch (Exception ex) {
+                display.setText("Error");
+                inputBuffer.setLength(0);
+            }
+        } else if (command.equals("AC")) {
+            inputBuffer.setLength(0);
+            display.setText("");
+        } else {
+            inputBuffer.append(command);
+            display.setText(inputBuffer.toString());
+        }
+    }
+
+    // Evaluate expression using postfix
+    private String evaluateExpression(String expression) {
+        Queue<String> postfix = infixToPostfix(expression);
+        return String.valueOf(evaluatePostfix(postfix));
+    }
+
+    private Queue<String> infixToPostfix(String expression) {
+        Stack<Character> stack = new Stack<>();
+        Queue<String> output = new LinkedList<>();
+        expression = expression.replaceAll("([+\\-×÷()%])", " $1 ");
+        StringTokenizer st = new StringTokenizer(expression);
+
+        while (st.hasMoreTokens()) {
+            String token = st.nextToken();
+            if (isNumber(token)) output.add(token);
+            else if (token.equals("(")) stack.push('(');
+            else if (token.equals(")")) {
+                while (!stack.isEmpty() && stack.peek() != '(') output.add(stack.pop()+"");
+                stack.pop();
+            } else if (isOperator(token)) {
+                char curr = token.charAt(0);
+                while (!stack.isEmpty() && precedence(stack.peek()) >= precedence(curr))
+                    output.add(stack.pop()+"");
+                stack.push(curr);
+            } else if (token.equals("%")) output.add("%");
+        }
+
+        while (!stack.isEmpty()) output.add(stack.pop()+"");
+        return output;
+    }
+
+    private double evaluatePostfix(Queue<String> postfix) {
+        Stack<Double> stack = new Stack<>();
+        for (String token : postfix) {
+            if (isNumber(token)) stack.push(Double.parseDouble(token));
+            else if (token.equals("%")) stack.push(stack.pop() / 100.0);
+            else {
+                double b = stack.pop();
+                double a = stack.pop();
+                switch (token) {
+                    case "+": stack.push(a+b); break;
+                    case "-": stack.push(a-b); break;
+                    case "×": stack.push(a*b); break;
+                    case "÷": stack.push(a/b); break;
+                }
+            }
+        }
+        return stack.pop();
+    }
+
+    private boolean isNumber(String token) {
+        try { Double.parseDouble(token); return true; }
+        catch (NumberFormatException e) { return false; }
+    }
+
+    private boolean isOperator(String token) { return "+-×÷".contains(token); }
+
+    private int precedence(char op) {
+        if (op=='×'||op=='÷') return 2;
+        if (op=='+'||op=='-') return 1;
+        return -1;
+    }
+
+    private void saveHistory() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("history_" + currentUser + ".txt"))) {
+            for (String entry : historyList) bw.write(entry+"\n");
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    private void loadHistory() {
+        File file = new File("history_" + currentUser + ".txt");
+        if (!file.exists()) return;
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) historyList.add(line);
+            updateHistoryArea();
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    private void updateHistoryArea() {
+        StringBuilder sb = new StringBuilder();
+        for (String entry : historyList) sb.append(entry).append("\n");
+        historyArea.setText(sb.toString());
+        historyArea.setCaretPosition(historyArea.getDocument().getLength());
+    }
+}
+
+// ==================== MAIN ENTRY ====================
+public class Main {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(LoginFrame::new);
+    }
+}
